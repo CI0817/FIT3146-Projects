@@ -39,6 +39,7 @@ def take_photo():
     cmd = [
         "fswebcam",
         "-r", "1280x720", # resolution
+        "--flip", "h", # mirror image
         "-S", "20", # discard the first 20 frames (could be blurry)
         "--no-banner", # remove default banner
         filename
