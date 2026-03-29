@@ -170,6 +170,38 @@ def apply_classic_negative_filter(input_filename, output_filename):
     img.save(output_filename, quality=95)
     print(f"Smoothed Classic Negative photo saved: {output_filename}")
 
+def apply_acros_bw_filter(input_filename, output_filename):
+    img = Image.open(input_filename).convert("RGB")
+
+    # Acros has a strong, punchy contrast right from the start
+    img = ImageEnhance.Contrast(img).enhance(1.25)
+    
+    pixels = img.load()
+    width, height = img.size
+
+    for y in range(height):
+        for x in range(width):
+            r, g, b = pixels[x, y]
+
+            # Custom B&W conversion: weighting green a bit more gives smoother tones
+            lum = 0.25 * r + 0.65 * g + 0.10 * b
+
+            # Create that rich film depth with an S-curve
+            if lum < 75:
+                # Darken the shadows to make them deep and rich
+                lum *= 0.88
+            elif lum > 180:
+                # Keep the highlights crisp and bright
+                lum *= 1.05
+
+            lum = max(0, min(255, int(lum)))
+
+            # Set all channels to the same value for pure grayscale
+            pixels[x, y] = (lum, lum, lum)
+
+    img.save(output_filename, quality=95)
+    print(f"Acros B&W photo saved: {output_filename}")
+
 # Global variable to avoid multiple presses
 busy = False
 
@@ -191,6 +223,7 @@ def take_photo():
     filtered_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_vintage.jpg")
     classicChrome_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_classicChrome.jpg")
     classicNeg_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_classicNeg.jpg")
+    acros_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_acros.jpg")
 
     # fswebcam command to be used
     cmd = [
@@ -211,6 +244,7 @@ def take_photo():
         apply_vintage_filter(filename, filtered_filename)
         apply_classic_chrome_filter(filename, classicChrome_filename)
         apply_classic_negative_filter(filename, classicNeg_filename)
+        apply_acros_bw_filter(filename, acros_filename)
     # If sth fails
     except subprocess.CalledProcessError as e:
         print(f"Failed to take photo: {e}")
