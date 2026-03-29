@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Last Modified: 29.03.26 2.52PM
+# Last Modified: 29.03.26 3.53PM
 
 from gpiozero import Button # handles the GPIO input (the physical button)
 from signal import pause # keeps the script running forever
@@ -8,18 +8,20 @@ import subprocess # lets Python run shell commands (fswebcam)
 import os # for file paths and folder creation
 from PIL import Image, ImageEnhance, ImageFilter # Python Imagery Library (PIL)
 
-# Connect physical button to pin 11
-# 17: GPIO17 (physical pin 11)
-# pull_up=True: uses internal pull-up resistor
-# default state: HIGH
-# pressed = LOW (connected to GND)
-# bounce_time=0.1: filters noisy button presses (debouncing)
-button = Button(17, pull_up=True, bounce_time=0.1)
+shutter_button = Button(17, pull_up=True, bounce_time=0.1)
+filter_button = Button(27, pull_up=True, bounce_time=0.1)
+mirror_button = Button(22, pull_up=True, bounce_time=0.1)
 
 # Create or get the path to save picture
-# exist_ok=True: won’t crash if folder already exists
+# exist_ok=True: wont crash if folder already exists
 SAVE_DIR = "Photos"
 os.makedirs(SAVE_DIR, exist_ok=True)
+
+# Available filters: 0=None, 1=Vintage, 2=Chrome, 3=Negative, 4=Acros
+filters = ["None", "Vintage", "Classic Chrome", "Classic Negative", "Acros B&W"]
+current_filter_index = 0
+mirror_enabled = True # Default to mirrored
+busy = False
 
 def apply_vintage_filter(input_filename, output_filename):
     img = Image.open(input_filename).convert("RGB")
@@ -202,60 +204,72 @@ def apply_acros_bw_filter(input_filename, output_filename):
     img.save(output_filename, quality=95)
     print(f"Acros B&W photo saved: {output_filename}")
 
-# Global variable to avoid multiple presses
-busy = False
+def cycle_filter():
+    global current_filter_index
+    current_filter_index = (current_filter_index + 1) % len(filters)
+    print(f"Selected Filter: {filters[current_filter_index]}")
+
+def toggle_mirror():
+    global mirror_enabled
+    mirror_enabled = not mirror_enabled
+    print(f"Mirroring: {'ON' if mirror_enabled else 'OFF'}")
 
 def take_photo():
-    # Look at the global variable, busy
     global busy
     if busy:
-        print("Still taking previous photo...")
         return
     
     busy = True
-    print("Taking photo...")
+    print(f"Capturing with {filters[current_filter_index]} (Mirror: {mirror_enabled})...")
     
-    # Get current datetime
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    # Create a filename based on datetime, all files are unique
-    filename = os.path.join(SAVE_DIR, f"photo_{timestamp}.jpg")
-    # Create a filename for the filtered image
-    filtered_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_vintage.jpg")
-    classicChrome_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_classicChrome.jpg")
-    classicNeg_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_classicNeg.jpg")
-    acros_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_acros.jpg")
+    raw_filename = os.path.join(SAVE_DIR, f"raw_{timestamp}.jpg")
+    final_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}.jpg")
 
-    # fswebcam command to be used
+    # Build the fswebcam command
     cmd = [
         "fswebcam",
-        "-r", "1280x720", # resolution
-        "--flip", "h", # mirror image
-        "-S", "20", # discard the first 20 frames (could be blurry)
-        "--no-banner", # remove default banner
-        filename
+        "-r", "1280x720",
+        "-S", "20",
+        "--no-banner",
+        raw_filename
     ]
+    
+    # Add horizontal flip ONLY if mirror_enabled is True
+    if mirror_enabled:
+        cmd.insert(5, "--flip")
+        cmd.insert(6, "h")
 
     try:
-        # Run the command
-        # check=True: raises error if it fails
         subprocess.run(cmd, check=True)
-        print(f"Photo saved: {filename}")
-        # Run the vintage filter function
-        apply_vintage_filter(filename, filtered_filename)
-        apply_classic_chrome_filter(filename, classicChrome_filename)
-        apply_classic_negative_filter(filename, classicNeg_filename)
-        apply_acros_bw_filter(filename, acros_filename)
-    # If sth fails
+        
+        # Apply the chosen filter
+        idx = current_filter_index
+        if idx == 0: # None
+            os.rename(raw_filename, final_filename)
+            print(f"Photo saved (No filter): {final_filename}")
+        elif idx == 1:
+            apply_vintage_filter(raw_filename, final_filename)
+        elif idx == 2:
+            apply_classic_chrome_filter(raw_filename, final_filename)
+        elif idx == 3:
+            apply_classic_negative_filter(raw_filename, final_filename)
+        elif idx == 4:
+            apply_acros_bw_filter(raw_filename, final_filename)
+            
+        # Clean up the raw file if a filter was applied
+        if idx != 0 and os.path.exists(raw_filename):
+            os.remove(raw_filename)
+
     except subprocess.CalledProcessError as e:
-        print(f"Failed to take photo: {e}")
-    # If everything went ok, reset the busy flag
+        print(f"Failed: {e}")
     finally:
         busy = False
 
-# When GPIO17 detects a press, call the take_photo function
-button.when_pressed = take_photo
+shutter_button.when_pressed = take_photo
+filter_button.when_pressed = cycle_filter
+mirror_button.when_pressed = toggle_mirror
 
-# Wait for the button press
-# Once pressed and the function completed, the script contiue waiting
-print("Waiting for button press...")
+print("Camera Ready!")
+print(f"Default: {filters[current_filter_index]} | Mirror: {mirror_enabled}")
 pause()
