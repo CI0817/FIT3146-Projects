@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Last Modified: 29.03.26 1.51PM
+# Last Modified: 29.03.26 2.52PM
 
 from gpiozero import Button # handles the GPIO input (the physical button)
 from signal import pause # keeps the script running forever
@@ -24,16 +24,11 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 def apply_vintage_filter(input_filename, output_filename):
     img = Image.open(input_filename).convert("RGB")
 
-    # Slightly reduce saturation
-    img = ImageEnhance.Color(img).enhance(0.85)
+    # Global adjustments
+    img = ImageEnhance.Color(img).enhance(0.82)
+    img = ImageEnhance.Contrast(img).enhance(0.90)
+    img = ImageEnhance.Brightness(img).enhance(1.02)
 
-    # Slightly lower contrast
-    img = ImageEnhance.Contrast(img).enhance(0.92)
-
-    # Slightly increase brightness
-    img = ImageEnhance.Brightness(img).enhance(1.03)
-
-    # Add a warm tone
     pixels = img.load()
     width, height = img.size
 
@@ -41,34 +36,49 @@ def apply_vintage_filter(input_filename, output_filename):
         for x in range(width):
             r, g, b = pixels[x, y]
 
-            r = min(255, int(r * 1.08))
-            g = min(255, int(g * 1.02))
-            b = min(255, int(b * 0.92))
+            # Approximate luminance
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+
+            # Warm overall tone
+            r *= 1.08
+            g *= 1.02
+            b *= 0.90
+
+            # Lift blacks / fade shadows
+            if lum < 90:
+                r = r * 0.92 + 14
+                g = g * 0.92 + 12
+                b = b * 0.92 + 10
+
+            # Soften highlights slightly
+            elif lum > 190:
+                r = r * 0.97 + 3
+                g = g * 0.97 + 3
+                b = b * 0.97 + 3
+
+            r = max(0, min(255, int(r)))
+            g = max(0, min(255, int(g)))
+            b = max(0, min(255, int(b)))
 
             pixels[x, y] = (r, g, b)
 
-    # Slight blur
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.3))
+    # Slight softness to reduce digital sharpness
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.35))
 
     img.save(output_filename, quality=95)
-    print(f"Filtered photo saved: {output_filename}")
+    print(f"Vintage photo saved: {output_filename}")
 
 def apply_classic_chrome_filter(input_filename, output_filename):
     img = Image.open(input_filename).convert("RGB")
 
-    # 1) Lower saturation for muted documentary-style color
-    img = ImageEnhance.Color(img).enhance(0.78)
-
-    # 2) Slight contrast shaping
-    img = ImageEnhance.Contrast(img).enhance(0.95)
-
-    # 3) Slightly reduce brightness so it does not feel too digital/clean
+    # Global adjustments for a "hard, deep" base look
+    # 1. More dramatic base desaturation
+    img = ImageEnhance.Color(img).enhance(0.70) 
+    # 2. Key: INCREASE contrast for a hard, punchy look
+    img = ImageEnhance.Contrast(img).enhance(1.18)
+    # 3. Slight darkening for depth
     img = ImageEnhance.Brightness(img).enhance(0.97)
 
-    # 4) Classic Chrome-style channel tuning:
-    #    - suppress reds / magenta a bit
-    #    - cool shadows overall by slightly favoring blue
-    #    - keep greens natural but not vivid
     pixels = img.load()
     width, height = img.size
 
@@ -76,22 +86,92 @@ def apply_classic_chrome_filter(input_filename, output_filename):
         for x in range(width):
             r, g, b = pixels[x, y]
 
-            r = int(r * 0.93)   # reduce red
-            g = int(g * 0.97)   # slightly mute green
-            b = int(b * 1.04)   # slight cool shift
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
 
-            # clamp to valid range
-            r = max(0, min(255, r))
-            g = max(0, min(255, g))
-            b = max(0, min(255, b))
+            # Selective Color Muting (Midtones and up)
+            if lum > 80:
+                # Key Classic Chrome Color Shifts:
+                # 1. Deep red suppression
+                r *= 0.90 
+                # 2. Deep green suppression
+                g *= 0.93 
+                # 3. Add deep, distinctive blues (small lift)
+                b *= 1.05
+
+                # Highlight compression (your existing logic is good)
+                if lum > 190:
+                    r = r * 0.97 + 2
+                    g = g * 0.97 + 2
+                    b = b * 0.97 + 2
+            
+            # Deeper Shadow Management (Lum < 80)
+            else: 
+                # We want true, deep blacks.
+                # Deep color suppression in shadows to match.
+                r *= 0.88
+                g *= 0.92
+                b *= 0.98
+
+            # Clamping (must remain)
+            r = max(0, min(255, int(r)))
+            g = max(0, min(255, int(g)))
+            b = max(0, min(255, int(b)))
 
             pixels[x, y] = (r, g, b)
 
-    # 5) Slight blur to reduce digital sharpness
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.25))
+    # Blur - Classic Chrome is often sharp. Skipping this or 
+    # using an extremely low radius.
+    # img = img.filter(ImageFilter.GaussianBlur(radius=0.18))
 
     img.save(output_filename, quality=95)
-    print(f"Classic Chrome-style photo saved: {output_filename}")
+    print(f"Realistic Classic Chrome photo saved: {output_filename}")
+
+def apply_classic_negative_filter(input_filename, output_filename):
+    img = Image.open(input_filename).convert("RGB")
+
+    # Global adjustments: High contrast, slightly more colour than Chrome
+    img = ImageEnhance.Color(img).enhance(0.85) 
+    img = ImageEnhance.Contrast(img).enhance(1.20)
+    img = ImageEnhance.Brightness(img).enhance(0.98)
+
+    pixels = img.load()
+    width, height = img.size
+
+    for y in range(height):
+        for x in range(width):
+            r, g, b = pixels[x, y]
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+
+            # Classic Negative Colour Shifts (Midtones and up)
+            if lum > 60:
+                # 1. Warm up the reds for that nostalgic pop
+                r *= 1.10 
+                # 2. Desaturate greens and push them slightly towards cyan
+                g *= 0.88 
+                # 3. Lift blues slightly to support the cool greens
+                b *= 1.05 
+
+                # Warm highlights
+                if lum > 190:
+                    r = r * 0.95 + 8
+                    g = g * 0.95 + 4
+                    b = b * 0.95 + 2
+            
+            # Deeper Shadow Management (Lum < 60)
+            else: 
+                # Hard shadows with a very slight cool/cyan fade
+                r *= 0.82
+                g *= 0.90
+                b *= 0.95
+
+            r = max(0, min(255, int(r)))
+            g = max(0, min(255, int(g)))
+            b = max(0, min(255, int(b)))
+
+            pixels[x, y] = (r, g, b)
+
+    img.save(output_filename, quality=95)
+    print(f"Classic Negative photo saved: {output_filename}")
 
 # Global variable to avoid multiple presses
 busy = False
@@ -113,6 +193,7 @@ def take_photo():
     # Create a filename for the filtered image
     filtered_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_vintage.jpg")
     classicChrome_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_classicChrome.jpg")
+    classicNeg_filename = os.path.join(SAVE_DIR, f"photo_{timestamp}_classicNeg.jpg")
 
     # fswebcam command to be used
     cmd = [
@@ -132,6 +213,7 @@ def take_photo():
         # Run the vintage filter function
         apply_vintage_filter(filename, filtered_filename)
         apply_classic_chrome_filter(filename, classicChrome_filename)
+        apply_classic_negative_filter(filename, classicNeg_filename)
     # If sth fails
     except subprocess.CalledProcessError as e:
         print(f"Failed to take photo: {e}")
