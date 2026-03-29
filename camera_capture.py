@@ -129,10 +129,10 @@ def apply_classic_chrome_filter(input_filename, output_filename):
 def apply_classic_negative_filter(input_filename, output_filename):
     img = Image.open(input_filename).convert("RGB")
 
-    # Global adjustments: Punchy contrast
+    # 1. Back off the contrast just a touch to stop the banding
     img = ImageEnhance.Color(img).enhance(0.90) 
-    img = ImageEnhance.Contrast(img).enhance(1.20)
-    img = ImageEnhance.Brightness(img).enhance(0.95)
+    img = ImageEnhance.Contrast(img).enhance(1.12) # Dropped from 1.20
+    img = ImageEnhance.Brightness(img).enhance(0.98)
 
     pixels = img.load()
     width, height = img.size
@@ -142,23 +142,21 @@ def apply_classic_negative_filter(input_filename, output_filename):
             r, g, b = pixels[x, y]
             lum = 0.299 * r + 0.587 * g + 0.114 * b
 
-            # Split toning instead of blanket midtone changes
             if lum < 80:
-                # Shadows: Add the signature cool/cyan Superia tint
-                r *= 0.85
-                g *= 0.95
-                b *= 1.05
+                # 2. Softer cyan shift, plus a tiny lift (+3/+5) to stop pixelation
+                r = r * 0.90 + 3
+                g = g * 0.96 + 3
+                b = b * 1.02 + 5
             elif lum > 170:
-                # Highlights: Push a slight golden warmth
-                r *= 1.05
-                g *= 1.02
-                b *= 0.95
+                # Highlights: Gentle warm push
+                r *= 1.03
+                g *= 1.01
+                b *= 0.97
             else:
-                # Midtones: Keep it much closer to neutral to protect walls/skin
-                # Just a tiny push on red, slight drop on green
-                r *= 1.02 
-                g *= 0.96
-                b *= 0.98
+                # Midtones: Very close to neutral to protect walls
+                r *= 1.01 
+                g *= 0.98
+                b *= 0.99
 
             r = max(0, min(255, int(r)))
             g = max(0, min(255, int(g)))
@@ -166,8 +164,11 @@ def apply_classic_negative_filter(input_filename, output_filename):
 
             pixels[x, y] = (r, g, b)
 
+    # 3. Add a very slight blur to smooth out the colour transitions
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.25))
+
     img.save(output_filename, quality=95)
-    print(f"Classic Negative photo saved: {output_filename}")
+    print(f"Smoothed Classic Negative photo saved: {output_filename}")
 
 # Global variable to avoid multiple presses
 busy = False
