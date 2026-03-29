@@ -7,10 +7,17 @@ from datetime import datetime # used to timestamp filenames
 import subprocess # lets Python run shell commands (fswebcam)
 import os # for file paths and folder creation
 from PIL import Image, ImageEnhance, ImageFilter # Python Imagery Library (PIL)
+from RPLCD.i2c import CharLCD
 
 shutter_button = Button(17, pull_up=True, bounce_time=0.1)
 filter_button = Button(27, pull_up=True, bounce_time=0.1)
 mirror_button = Button(22, pull_up=True, bounce_time=0.1)
+
+# --- LCD Initialisation ---
+# 'PCF8574' is the most common I2C backpack chip. 
+# 0x27 is the default address for most modules.
+lcd = CharLCD(i2c_expander='PCF8574', address=0x27, port=1, cols=16, rows=2, dotsize=8)
+lcd.clear()
 
 # Create or get the path to save picture
 # exist_ok=True: wont crash if folder already exists
@@ -22,6 +29,16 @@ filters = ["None", "Vintage", "Classic Chrome", "Classic Negative", "Acros B&W"]
 current_filter_index = 0
 mirror_enabled = True # Default to mirrored
 busy = False
+
+def update_lcd():
+    """Updates the 16x2 display with current settings."""
+    lcd.clear()
+    # Line 1: Filter Name
+    lcd.write_string(f"F: {filters[current_filter_index]}")
+    # Line 2: Mirror Status
+    lcd.cursor_pos = (1, 0)
+    mirror_text = "Mirror: ON" if mirror_enabled else "Mirror: OFF"
+    lcd.write_string(mirror_text)
 
 def apply_vintage_filter(input_filename, output_filename):
     img = Image.open(input_filename).convert("RGB")
@@ -208,11 +225,13 @@ def cycle_filter():
     global current_filter_index
     current_filter_index = (current_filter_index + 1) % len(filters)
     print(f"Selected Filter: {filters[current_filter_index]}")
+    update_lcd()
 
 def toggle_mirror():
     global mirror_enabled
     mirror_enabled = not mirror_enabled
     print(f"Mirroring: {'ON' if mirror_enabled else 'OFF'}")
+    update_lcd()
 
 def take_photo():
     global busy
@@ -220,6 +239,8 @@ def take_photo():
         return
     
     busy = True
+    lcd.clear()
+    lcd.write_string("Capturing...")
     print(f"Capturing with {filters[current_filter_index]} (Mirror: {mirror_enabled})...")
     
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -260,11 +281,20 @@ def take_photo():
         # Clean up the raw file if a filter was applied
         if idx != 0 and os.path.exists(raw_filename):
             os.remove(raw_filename)
+        
+        lcd.clear()
+        lcd.write_string("Photo Saved!")
 
     except subprocess.CalledProcessError as e:
+        lcd.clear()
+        lcd.write_string("Error!")
         print(f"Failed: {e}")
     finally:
         busy = False
+        # Return to settings display after a short delay
+        import time
+        time.sleep(2)
+        update_lcd()
 
 shutter_button.when_pressed = take_photo
 filter_button.when_pressed = cycle_filter
@@ -272,4 +302,5 @@ mirror_button.when_pressed = toggle_mirror
 
 print("Camera Ready!")
 print(f"Default: {filters[current_filter_index]} | Mirror: {mirror_enabled}")
+update_lcd()
 pause()
