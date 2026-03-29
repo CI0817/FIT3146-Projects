@@ -129,10 +129,10 @@ def apply_classic_chrome_filter(input_filename, output_filename):
 def apply_classic_negative_filter(input_filename, output_filename):
     img = Image.open(input_filename).convert("RGB")
 
-    # Global adjustments: High contrast, slightly more colour than Chrome
-    img = ImageEnhance.Color(img).enhance(0.85) 
+    # Global adjustments: Punchy contrast
+    img = ImageEnhance.Color(img).enhance(0.90) 
     img = ImageEnhance.Contrast(img).enhance(1.20)
-    img = ImageEnhance.Brightness(img).enhance(0.98)
+    img = ImageEnhance.Brightness(img).enhance(0.95)
 
     pixels = img.load()
     width, height = img.size
@@ -142,27 +142,23 @@ def apply_classic_negative_filter(input_filename, output_filename):
             r, g, b = pixels[x, y]
             lum = 0.299 * r + 0.587 * g + 0.114 * b
 
-            # Classic Negative Colour Shifts (Midtones and up)
-            if lum > 60:
-                # 1. Warm up the reds for that nostalgic pop
-                r *= 1.10 
-                # 2. Desaturate greens and push them slightly towards cyan
-                g *= 0.88 
-                # 3. Lift blues slightly to support the cool greens
-                b *= 1.05 
-
-                # Warm highlights
-                if lum > 190:
-                    r = r * 0.95 + 8
-                    g = g * 0.95 + 4
-                    b = b * 0.95 + 2
-            
-            # Deeper Shadow Management (Lum < 60)
-            else: 
-                # Hard shadows with a very slight cool/cyan fade
-                r *= 0.82
-                g *= 0.90
+            # Split toning instead of blanket midtone changes
+            if lum < 80:
+                # Shadows: Add the signature cool/cyan Superia tint
+                r *= 0.85
+                g *= 0.95
+                b *= 1.05
+            elif lum > 170:
+                # Highlights: Push a slight golden warmth
+                r *= 1.05
+                g *= 1.02
                 b *= 0.95
+            else:
+                # Midtones: Keep it much closer to neutral to protect walls/skin
+                # Just a tiny push on red, slight drop on green
+                r *= 1.02 
+                g *= 0.96
+                b *= 0.98
 
             r = max(0, min(255, int(r)))
             g = max(0, min(255, int(g)))
