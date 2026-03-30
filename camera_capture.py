@@ -12,8 +12,9 @@ from RPLCD.i2c import CharLCD
 shutter_button = Button(17, pull_up=True, bounce_time=0.1)
 filter_button = Button(27, pull_up=True, bounce_time=0.1)
 mirror_button = Button(22, pull_up=True, bounce_time=0.1)
+shutdown_button = Button(26, pull_up=True, bounce_time=0.1, hold_time=3)
 
-# --- LCD Initialisation ---
+# LCD initialisation
 # 'PCF8574' is the most common I2C backpack chip. 
 # 0x27 is the default address for most modules.
 lcd = CharLCD(i2c_expander='PCF8574', address=0x27, port=1, cols=16, rows=2, dotsize=8)
@@ -29,6 +30,11 @@ filters = ["None", "Vintage", "Classic Chrome", "Classic Negative", "Acros B&W"]
 current_filter_index = 0
 mirror_enabled = True # Default to mirrored
 busy = False
+
+def safe_shutdown():
+    lcd.clear()
+    lcd.write_string("Shutting down...")
+    os.system("sudo shutdown -h now")
 
 def update_lcd():
     """Updates the 16x2 display with current settings."""
@@ -299,6 +305,9 @@ def take_photo():
 shutter_button.when_pressed = take_photo
 filter_button.when_pressed = cycle_filter
 mirror_button.when_pressed = toggle_mirror
+
+# This only runs if you hold the button for 3 seconds
+shutdown_button.when_held = safe_shutdown
 
 print("Camera Ready!")
 print(f"Default: {filters[current_filter_index]} | Mirror: {mirror_enabled}")
