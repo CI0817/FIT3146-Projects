@@ -8,6 +8,7 @@ import subprocess # lets Python run shell commands (fswebcam)
 import os # for file paths and folder creation
 from PIL import Image, ImageEnhance, ImageFilter # Python Imagery Library (PIL)
 from RPLCD.i2c import CharLCD
+import time
 
 shutter_button = Button(17, pull_up=True, bounce_time=0.1)
 filter_button = Button(27, pull_up=True, bounce_time=0.1)
@@ -34,6 +35,9 @@ busy = False
 def safe_shutdown():
     lcd.clear()
     lcd.write_string("Shutting down...")
+    time.sleep(1)
+    lcd.backlight_enabled = False
+    lcd.close()
     os.system("sudo shutdown -h now")
 
 def update_lcd():
